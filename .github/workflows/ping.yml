@@ -27,15 +27,30 @@ jobs:
           sudo firewall-cmd --list-all || echo "firewalld not available"
 
           echo "=== Firewall check complete ==="
-
-      - name: Scan open ports on 13.83.233.97
+      
+      - name: Scan UDP and other protocols on 13.83.233.97
         shell: bash
         run: |
           echo "Installing nmap..."
           sudo apt-get update -y
           sudo apt-get install -y nmap
+      
+          TARGET_IP="13.83.233.97"
+      
+          echo "=== ICMP Ping Test ==="
+          ping -c 4 $TARGET_IP || echo "Ping failed or ICMP blocked"
+      
+          echo "=== UDP Top Ports Scan ==="
+          nmap -sU -Pn --top-ports 200 $TARGET_IP
+      
+          echo "=== Full UDP Scan (may take a long time) ==="
+          nmap -sU -Pn $TARGET_IP
+      
+          echo "=== SCTP Scan (Stream Control Transmission Protocol) ==="
+          nmap -sY -Pn $TARGET_IP
+      
+          echo "=== Protocol Scan (IP protocol discovery) ==="
+          nmap -sO -Pn $TARGET_IP
+      
+          echo "=== Completed UDP + Protocol Scan ==="
 
-          echo "Scanning open ports on 13.83.233.97..."
-          nmap -Pn -sV 13.83.233.97
-
-          echo "Port scan complete."
