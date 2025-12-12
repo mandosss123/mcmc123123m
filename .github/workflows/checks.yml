@@ -1,12 +1,9 @@
 name: Diagnose VM Network Connectivity
 
+
 on:
-  push:
-    branches:
-      - main
-  pull_request:
-    branches:
-      - main
+  workflow_dispatch:
+
 
 jobs:
   diagnose_network:
