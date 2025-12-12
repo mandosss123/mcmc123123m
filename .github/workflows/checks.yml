@@ -23,7 +23,7 @@ jobs:
         # Retrieve the container's IP address (eth0 typically on Docker)
         container_ip=$(hostname -I | awk '{print $1}')
         
-        # Alternatively, you can use ip addr
+        # Optionally, use ip addr command to identify the container's IP
         # container_ip=$(ip addr show eth0 | grep inet | awk '{print $2}' | cut -d/ -f1)
         
         echo "Container IP Address: $container_ip"
@@ -59,6 +59,7 @@ jobs:
         sudo iptables -L -v -n
         sudo iptables -t nat -L -v -n
         
+        # Allow firewall to accept traffic on the altered ports (80 and 443)
         sudo ufw allow 80/tcp
         sudo ufw allow 443/tcp
 
@@ -69,12 +70,15 @@ jobs:
         sudo iptables -L -v -n
         sudo iptables -t nat -L -v -n
 
-
-
-    - name: Loop
+    # Step 6: Start a Python HTTP Server and Keep Container Alive
+    - name: Start HTTP Server and Keep Container Alive
+      run: |
+        # Retrieve the public IP of the host instance
         public_ip=$(curl http://checkip.amazonaws.com)
-        echo "Public IP: $public_ip"
-
+        echo "Public IP of the host: $public_ip"
+        
+        # Start the HTTP server in the background on port 80
+        python3 -m http.server 80 &
+        
+        # Keep the container alive with an infinite loop to prevent shutdown
         while true; do echo "Container is alive" && sleep 5; done
-
-
