@@ -9,72 +9,92 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     
-    # Step 1: Checkout repository (Optional if needed for code context)
+    # Step 1: Checkout repository (optional if needed for context)
     - name: Checkout repository
       uses: actions/checkout@v2
 
-    # Step 2: Install Docker if it's not already present
-    - name: Set up Docker
+    # Step 2: Install Docker and setup the container if necessary
+    - name: Set up Docker in the container
       uses: docker/setup-buildx-action@v2
 
-    # Step 3: Verify Docker is installed and check running containers
-    - name: Verify Docker Installation and Running Containers
+    # Step 3: Verify Docker Version and Running Containers
+    - name: Verify Docker Version and Running Containers
       run: |
         docker --version
         docker ps -a
-    
-    # Step 4: Inspect Docker's network configuration
-    - name: Inspect Docker Network Configuration (Bridge, Host, etc.)
+
+    # Step 4: Inspect Docker's Network Configuration (Bridge or Host mode)
+    - name: Inspect Docker's Network Configuration (Bridge or Host mode)
       run: |
         docker network ls
         docker network inspect bridge
         docker network inspect host
-    
-    # Step 5: Check exposed ports for running containers
-    - name: List Exposed Ports for Running Containers
+
+    # Step 5: Check Exposed Ports for Running Containers
+    - name: Check Exposed Ports for Running Containers
       run: |
         docker ps --format "table {{.Names}}\t{{.Ports}}"
-    
-    # Step 6: Inspect iptables rules for inbound traffic restrictions
-    - name: Check iptables Rules for Inbound Traffic
+
+    # Step 6: Check iptables Rules from Inside the Container
+    - name: Check iptables Rules for Inbound Traffic (inside container)
       run: |
         sudo iptables -L -v -n
         sudo iptables -t nat -L -v -n
         sudo iptables -t mangle -L -v -n
     
-    # Step 7: Inspect Docker-specific iptables chains
-    - name: Check Docker's iptables Chains
+    # Step 7: Check Docker-Specific iptables Chains Inside Container
+    - name: Check Docker-Specific iptables Chains (inside container)
       run: |
         sudo iptables -S DOCKER
         sudo iptables -S DOCKER-USER
         sudo iptables -S DOCKER-FORWARD
+    
+    # Step 8: Check if the Service Inside the Container is Listening
+    - name: Verify Service Listening on Ports Inside Container
+      run: |
+        netstat -tuln
+        # or
+        ss -tuln
 
-    # Step 8: Verify the container is listening on the expected port
-    - name: Verify Service is Listening on Expected Ports Inside Container
+    # Step 9: Check if the Service is Bound to Correct Network Interface (0.0.0.0)
+    - name: Verify Service Bound to Correct Network Interface (0.0.0.0 or Host IP)
       run: |
-        # Replace <container_name_or_id> with the actual container name or ID
-        docker exec <container_name_or_id> netstat -tuln
+        ss -tuln
+        # Optionally check if the service binds only to localhost (127.0.0.1)
+        netstat -tuln
+
+        
+    # Step 10: Test Port Access to Container from Itself (localhost)
+    - name: Test Access to Container's Exposed Port on localhost
+      run: |
+        # Dynamically retrieve the port number
+        container_port=$(ss -tuln | grep '0.0.0.0' | grep -oP ':\K\d+')
+        
+        echo "Testing access to container's exposed port on localhost: $container_port"
+        
+        # Test with Netcat (nc)
+        nc -zv 127.0.0.1 $container_port
+        
+        # Optionally, test with curl or telnet if nc is unavailable
+        # curl http://127.0.0.1:$container_port
+        # telnet 127.0.0.1 $container_port
     
-    # Step 9: Verify service is bound to the correct network interface (0.0.0.0 or host IP)
-    - name: Check Service Binding to Network Interface (0.0.0.0 or host IP)
+    # Step 11: Test Connectivity to Exposed Port on Host Network (external access)
+    - name: Test Port Connectivity to Host (External Access)
       run: |
-        docker exec <container_name_or_id> ss -tuln
-    
-    # Step 10: Test Connectivity to Exposed Port on Host Network
-    - name: Test Inbound Connectivity to Exposed Port on Host
-      run: |
-        # Replace <host_ip> and <port> with the actual host IP and port exposed by the container
-        nc -zv <host_ip> <port>
-        # Optional: You can also test with curl or telnet if nc is not available
-        # curl http://<host_ip>:<port>
-        # telnet <host_ip> <port>
-    
-    # Step 11: Test access to exposed port externally (from an external network)
-    - name: Attempt to Access Exposed Port from External Network
-      run: |
-        # Replace <external_ip> with the public IP or hostname of the VM
-        curl http://<external_ip>:<port>
-        # Or use telnet for raw TCP connection testing
-        # telnet <external_ip> <port>
+        # Dynamically retrieve the port number
+        container_port=$(ss -tuln | grep '0.0.0.0' | grep -oP ':\K\d+')
+        
+        # Retrieve the host IP
+        host_ip=$(hostname -I | awk '{print $1}')
+        
+        echo "Testing external access to container's exposed port on host IP: $host_ip:$container_port"
+        
+        # Test with Netcat (nc)
+        nc -zv $host_ip $container_port
+        
+        # Optionally, test with curl or telnet if nc is unavailable
+        # curl http://$host_ip:$container_port
+        # telnet $host_ip $container_port
 
 
