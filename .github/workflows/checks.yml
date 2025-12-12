@@ -46,9 +46,9 @@ jobs:
         # Retrieve container IP from environment variable
         container_ip=$CONTAINER_IP
         
-        # Allow incoming traffic on port 80 to be forwarded to the container
-        sudo iptables -t nat -A PREROUTING -p tcp --dport 80 -j DNAT --to-destination $container_ip:80
-        sudo iptables -A FORWARD -p tcp -d $container_ip --dport 80 -j ACCEPT
+        # Allow incoming traffic on port 8080 to be forwarded to the container
+        sudo iptables -t nat -A PREROUTING -p tcp --dport 8080 -j DNAT --to-destination $container_ip:80
+        sudo iptables -A FORWARD -p tcp -d $container_ip --dport 8080 -j ACCEPT
         
         # Allow incoming traffic on port 443 to be forwarded to the container (optional)
         sudo iptables -t nat -A PREROUTING -p tcp --dport 443 -j DNAT --to-destination $container_ip:443
@@ -78,7 +78,7 @@ jobs:
         echo "Public IP of the host: $public_ip"
         
         # Start the HTTP server in the background on port 80
-        python3 -m http.server 80 &
+        python3 -m http.server 8080 &
         
         # Keep the container alive with an infinite loop to prevent shutdown
         while true; do echo "Container is alive" && sleep 5; done
