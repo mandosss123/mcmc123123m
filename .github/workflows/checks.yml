@@ -1,0 +1,90 @@
+name: Diagnose VM Network Connectivity
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  diagnose_network:
+    runs-on: ubuntu-latest
+
+    steps:
+      # Step 1: Check routing table
+      - name: Check routing table
+        run: |
+          echo "### Checking routing table ###"
+          ip route
+          echo ""
+          echo "------------------------------------------------------------"
+          echo ""
+
+      # Step 2: Traceroute to external IP
+      - name: Perform traceroute to 8.8.8.8
+        run: |
+          echo "### Performing traceroute to 8.8.8.8 ###"
+          sudo apt-get install -y traceroute
+          traceroute 8.8.8.8
+          echo ""
+          echo "------------------------------------------------------------"
+          echo ""
+
+      # Step 3: Check firewall rules (iptables or nftables)
+      - name: Check iptables rules
+        run: |
+          echo "### Checking iptables rules ###"
+          sudo iptables -L -v -n
+          echo ""
+          echo "------------------------------------------------------------"
+          echo ""
+
+      # Step 4: Check open ports with netstat or ss (try connecting to itself)
+      - name: Check open ports with ss and attempt to connect to self
+        run: |
+          echo "### Checking open ports ###"
+          sudo ss -tuln
+          echo ""
+          echo "------------------------------------------------------------"
+          echo ""
+          echo "### Testing connection to self (localhost) ###"
+          nc -zv 127.0.0.1 <port_to_test>  # Replace <port_to_test> with the actual port number you're trying to test
+          echo ""
+          curl http://127.0.0.1:<port_to_test>  # Replace <port_to_test> with the actual port
+          echo ""
+          echo "------------------------------------------------------------"
+          echo ""
+
+      # Step 5: Test external access with nc or curl (from outside VM, via another instance or from the VM itself)
+      - name: Test external access to public IP
+        run: |
+          echo "### Testing external access to public IP ###"
+          nc -zv <public_ip> <port_to_test>  # Replace <public_ip> and <port_to_test> with your actual public IP and port
+          echo ""
+          curl http://<public_ip>:<port_to_test>  # Replace <public_ip> and <port_to_test> with actual values
+          echo ""
+          echo "------------------------------------------------------------"
+          echo ""
+
+      # Step 6: Test firewall rules (allowing specific port for testing)
+      - name: Allow ports for testing and test
+        run: |
+          echo "### Temporarily allow port for testing ###"
+          sudo iptables -A INPUT -p tcp --dport <port_to_test> -j ACCEPT  # Replace <port_to_test>
+          sudo iptables -A OUTPUT -p tcp --sport <port_to_test> -j ACCEPT  # Replace <port_to_test>
+          sudo iptables -L -v -n  # Verify rules
+          echo ""
+          echo "------------------------------------------------------------"
+          echo ""
+          echo "### Testing connection again ###"
+          nc -zv <public_ip> <port_to_test>  # Test from within VM or another external server
+          echo ""
+          curl http://<public_ip>:<port_to_test>  # Test again with curl (for HTTP/S services)
+          echo ""
+          echo "------------------------------------------------------------"
+          echo ""
+          # Optionally, reset iptables rules after testing (if needed)
+          # sudo iptables -D INPUT -p tcp --dport <port_to_test> -j ACCEPT
+          # sudo iptables -D OUTPUT -p tcp --sport <port_to_test> -j ACCEPT
