@@ -10,29 +10,23 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-
-      - name: Run public IP script
+      - name: Continuously get public IP
         shell: bash
         run: |
-          cat << 'EOF' > get_public_ip.sh
-          #!/usr/bin/env bash
+          while true; do
+            IP=$( \
+              curl -s https://api.ipify.org || \
+              curl -s https://ifconfig.me || \
+              curl -s https://icanhazip.com || \
+              curl -s https://checkip.amazonaws.com \
+            )
 
-          # Try several public IP services until one succeeds
-          get_public_ip() {
-              curl -s https://api.ipify.org && return
-              curl -s https://ifconfig.me && return
-              curl -s https://icanhazip.com && return
-              curl -s https://checkip.amazonaws.com && return
-          }
-
-          IP=$(get_public_ip)
-
-          if [[ -z "$IP" ]]; then
+            if [[ -z "$IP" ]]; then
               echo "Unable to determine public IP address."
-          else
+            else
               echo "Public IP: $IP"
-          fi
-          EOF
+            fi
 
-          chmod +x get_public_ip.sh
-          ./get_public_ip.sh
+            sleep 2   # adjust interval as needed
+          done
+
