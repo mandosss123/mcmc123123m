@@ -10,10 +10,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     
-    # Step 1: Checkout repository (optional if needed for context)
-    - name: Checkout repository
-      uses: actions/checkout@v2
-
     # Step 2: Check the VM’s Network Configuration from Inside the Docker Container
     - name: Check Host (VM) Network Configuration
       run: |
@@ -22,17 +18,32 @@ jobs:
         
         # Check routing table of the VM to see if there is any issue with routing
         ip route show
-
+      
     # Step 3: Check if the Container Can Access the Host's External IP
     - name: Check Connectivity to Host's External IP from Inside the Container
       run: |
         # Retrieve the VM's external IP (e.g., public IP or internal network IP)
         vm_ip=$(hostname -I | awk '{print $1}')
         
+        # Output the external IP for debugging purposes
+        echo "VM External IP: $vm_ip"
+        
         # Test connectivity from the container to the VM's external IP
         echo "Testing connectivity to host VM external IP: $vm_ip"
-        nc -zv $vm_ip 80
-        nc -zv $vm_ip 443
+        
+        # Attempt to connect to HTTP and HTTPS ports on the VM's external IP
+        # Using nc (netcat) to test connectivity on port 80 and 443
+        # The -z flag tells nc to scan for open ports without sending any data, and -v is for verbose output
+        
+        # Test port 80 (HTTP)
+        nc -zv $vm_ip 80 || echo "Connection to $vm_ip on port 80 failed"
+        
+        # Test port 443 (HTTPS)
+        nc -zv $vm_ip 443 || echo "Connection to $vm_ip on port 443 failed"
+        
+        # Additional steps could be added here for further checks or debugging
+        # For example, you can use curl or telnet as an alternative
+
 
     # Step 4: Check iptables Rules (Inside Container)
     - name: Check iptables Rules (Inside Container)
