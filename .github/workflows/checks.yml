@@ -13,12 +13,18 @@ jobs:
       # Step 1: Check routing table
       - name: Check routing table
         run: |
-          echo "### Checking routing table ###"
-          ip route
+          ip route show
+      
+      # Step 2: Traceroute to external IP
+      - name: Perform traceroute to 8.8.8.8
+        run: |
+          echo "### Performing traceroute to 8.8.8.8 ###"
+          sudo apt-get install -y traceroute
+          traceroute 8.8.8.8
           echo ""
           echo "------------------------------------------------------------"
           echo ""
-
+          
       # Step 2: Traceroute to external IP
       - name: Perform traceroute to 8.8.8.8
         run: |
