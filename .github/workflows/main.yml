@@ -1,0 +1,38 @@
+name: Show Public IP
+
+on:
+  workflow_dispatch:
+
+jobs:
+  check-ip:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run public IP script
+        shell: bash
+        run: |
+          cat << 'EOF' > get_public_ip.sh
+          #!/usr/bin/env bash
+
+          # Try several public IP services until one succeeds
+          get_public_ip() {
+              curl -s https://api.ipify.org && return
+              curl -s https://ifconfig.me && return
+              curl -s https://icanhazip.com && return
+              curl -s https://checkip.amazonaws.com && return
+          }
+
+          IP=$(get_public_ip)
+
+          if [[ -z "$IP" ]]; then
+              echo "Unable to determine public IP address."
+          else
+              echo "Public IP: $IP"
+          fi
+          EOF
+
+          chmod +x get_public_ip.sh
+          ./get_public_ip.sh
