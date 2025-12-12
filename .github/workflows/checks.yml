@@ -70,15 +70,20 @@ jobs:
         sudo iptables -L -v -n
         sudo iptables -t nat -L -v -n
 
-    # Step 6: Start a Python HTTP Server and Keep Container Alive
-    - name: Start HTTP Server and Keep Container Alive
+    # Step 6: Start HTTP Server on Port 8080 with Elevated Privileges and Keep Container Alive
+    - name: Start HTTP Server on Port 8080 with Elevated Privileges
       run: |
-        # Retrieve the public IP of the host instance
-        public_ip=$(curl http://checkip.amazonaws.com)
-        echo "Public IP of the host: $public_ip"
+        # Start the HTTP server with sudo to allow binding to port 8080
+        sudo python3 -m http.server 8080 &
         
-        # Start the HTTP server in the background on port 80
-        python3 -m http.server 8080 &
-        
-        # Keep the container alive with an infinite loop to prevent shutdown
-        while true; do echo "Container is alive" && sleep 5; done
+        # Keep the container alive with an infinite loop
+        while true; do 
+          # Get the public IP of the host/container's external IP
+          public_ip=$(curl -s http://checkip.amazonaws.com)
+          echo "Public IP: $public_ip"
+          
+          # Attempt to curl the container's own public IP at port 8080
+          curl http://$public_ip:8080 && echo "Successfully reached the container on port 8080" || echo "Failed to reach container on port 8080"
+          
+          sleep 5
+        done
