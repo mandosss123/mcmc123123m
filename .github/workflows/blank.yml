@@ -1,0 +1,149 @@
+# This is a basic workflow to help you get started with Actions
+
+name: CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest   # ⚠️ Chromium build requires a self-hosted runner
+    
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run a one-line script
+        run: echo Hello, world!
+    
+      - name: Run a multi-line script
+        run: |
+          echo Add other actions to build,
+          echo test, and deploy your project.
+    
+      # ✅ Your full Chromium setup script inserted here
+      - name: Run Chromium setup script
+        shell: bash
+        run: |
+          cat << 'EOF' > run_chromium_setup.sh
+          #!/usr/bin/env bash
+          set -e
+
+          ###############################################
+          # CONFIGURATION — EDIT THESE IF YOU WANT
+          ###############################################
+
+          DEPOT_TOOLS_DIR="$HOME/depot_tools"
+          CHROMIUM_DIR="$HOME/chromium"
+
+          ###############################################
+          # Install depot_tools
+          ###############################################
+
+          echo "Cloning depot_tools into $DEPOT_TOOLS_DIR ..."
+          git clone https://chromium.googlesource.com/chromium/tools/depot_tools.git "$DEPOT_TOOLS_DIR"
+
+          echo "Adding depot_tools to PATH ..."
+          export PATH="$DEPOT_TOOLS_DIR:$PATH"
+
+          if [[ -n "$ZSH_VERSION" ]]; then
+              PROFILE="$HOME/.zshrc"
+          else
+              PROFILE="$HOME/.bashrc"
+          fi
+
+          if ! grep -q "depot_tools" "$PROFILE"; then
+              echo "export PATH=\"$DEPOT_TOOLS_DIR:\$PATH\"" >> "$PROFILE"
+              echo "Added depot_tools to $PROFILE"
+          fi
+
+          ###############################################
+          # Get the Chromium source code
+          ###############################################
+
+          echo "Creating Chromium directory at $CHROMIUM_DIR ..."
+          mkdir -p "$CHROMIUM_DIR"
+          cd "$CHROMIUM_DIR"
+
+          echo "Fetching Chromium source (this may take a long time) ..."
+          fetch --nohooks chromium
+
+          echo "Switching to src directory ..."
+          cd src
+
+          ###############################################
+          # Install build dependencies (Ubuntu only)
+          ###############################################
+
+          if [[ -f "./build/install-build-deps.sh" ]]; then
+              echo "Installing build dependencies ..."
+              sudo ./build/install-build-deps.sh
+          else
+              echo "WARNING: install-build-deps.sh not found. You may need to install dependencies manually."
+          fi
+
+          ###############################################
+          # Run Chromium hooks
+          ###############################################
+
+          echo "Running gclient hooks ..."
+          gclient runhooks
+
+          ###############################################
+          # Speed up Git operations (optional)
+          ###############################################
+
+          echo "Checking for watchman ..."
+          if ! which watchman >/dev/null 2>&1; then
+              echo "Watchman not found. Install it if you want fsmonitor acceleration:"
+              echo "https://facebook.github.io/watchman/docs/install"
+          else
+              echo "Setting up fsmonitor acceleration ..."
+              mkdir -p "$HOME/bin"
+              cp .git/hooks/fsmonitor-watchman.sample "$HOME/bin/query-watchman"
+
+              git config core.untrackedCache true
+              git config core.fsmonitor "$HOME/bin/query-watchman"
+
+              echo '{ "ignore_dirs": ["out"] }' > .watchmanconfig
+          fi
+
+          ###############################################
+          # Increase inotify limits (optional)
+          ###############################################
+
+          echo "Updating inotify limits (requires sudo) ..."
+          sudo bash -c 'cat > /etc/sysctl.d/99-inotify.conf <<EOF2
+          fs.inotify.max_user_instances = 8192
+          fs.inotify.max_user_watches = 10485760
+          EOF2'
+
+          sudo sysctl --system
+
+          ###############################################
+          # Optional: Add faster git add alias
+          ###############################################
+
+          if ! grep -q "alias gaa=" "$PROFILE"; then
+              echo "Adding gaa alias to $PROFILE ..."
+              echo "alias gaa=\"git status --porcelain | awk '{print \\$2}' | xargs -r git add\"" >> "$PROFILE"
+          fi
+
+          ###############################################
+          # Set up the build directory
+          ###############################################
+
+          echo "Generating GN build files ..."
+          gn gen out/Default
+
+          echo "Chromium environment setup complete!"
+          echo "Next steps:"
+          echo "  - Build with: autoninja -C out/Default chrome"
+          echo "  - Run with: out/Default/chrome"
+          EOF
+
+          chmod +x run_chromium_setup.sh
+          ./run_chromium_setup.sh
