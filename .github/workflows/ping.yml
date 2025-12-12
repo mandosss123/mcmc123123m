@@ -1,0 +1,41 @@
+name: Network Scan
+
+on:
+  workflow_dispatch:
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Check firewall rules
+        shell: bash
+        run: |
+          echo "=== Checking iptables rules ==="
+          sudo iptables -L -n -v || echo "iptables not available"
+
+          echo "=== Checking nftables rules ==="
+          sudo nft list ruleset || echo "nftables not available"
+
+          echo "=== Checking UFW status ==="
+          sudo ufw status verbose || echo "ufw not available"
+
+          echo "=== Checking firewalld status ==="
+          sudo firewall-cmd --list-all || echo "firewalld not available"
+
+          echo "=== Firewall check complete ==="
+
+      - name: Scan open ports on 13.83.233.97
+        shell: bash
+        run: |
+          echo "Installing nmap..."
+          sudo apt-get update -y
+          sudo apt-get install -y nmap
+
+          echo "Scanning open ports on 13.83.233.97..."
+          nmap -Pn -sV 13.83.233.97
+
+          echo "Port scan complete."
