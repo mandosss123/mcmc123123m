@@ -69,7 +69,12 @@ jobs:
         echo "Confirming iptables rules for the container..."
         sudo iptables -L -v -n
         sudo iptables -t nat -L -v -n
-
+    - name: oil
+      run: |
+        
+        public_ip=$(curl -s http://checkip.amazonaws.com)
+        echo "Public IP: $public_ip"
+      
     # Step 6: Start HTTP Server on Port 8080 with Elevated Privileges and Keep Container Alive
     - name: Start HTTP Server on Port 8080 with Elevated Privileges
       run: |
