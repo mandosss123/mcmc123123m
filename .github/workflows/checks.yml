@@ -1,4 +1,4 @@
-name: Diagnose VM Network Connectivity
+name: Diagnose and Alter Container Network Configuration
 
 on:
   workflow_dispatch:
@@ -8,120 +8,60 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     
-    # Step 2: Check the VM’s Network Configuration from Inside the Docker Container
-    - name: Check Host (VM) Network Configuration
+    # Step 1: Display the Container's Network Configuration
+    - name: Display Network Configuration
       run: |
-        # Display VM's network interfaces and IP configuration
-        ip addr show || echo "Failed to show network interfaces"
+        echo "Displaying network configuration..."
+        ip addr show
+        ip route show
         
-        # Check routing table of the VM to see if there is any issue with routing
-        ip route show || echo "Failed to show routing table"
-      
-    # Step 3: Check if the Container Can Access the Host's External IP
-    - name: Check Connectivity to Host's External IP from Inside the Container
+    # Step 2: Identify the Container's IP Address
+    - name: Identify Container's IP Address
       run: |
-        # Retrieve the VM's external IP (e.g., public IP or internal network IP)
-        vm_ip=$(hostname -I | awk '{print $1}')
+        echo "Identifying container's IP address..."
         
-        # Output the external IP for debugging purposes
-        echo "VM External IP: $vm_ip"
+        # Retrieve the container's IP address (eth0 typically on Docker)
+        container_ip=$(hostname -I | awk '{print $1}')
         
-        # Test connectivity from the container to the VM's external IP
-        echo "Testing connectivity to host VM external IP: $vm_ip"
+        # Alternatively, you can use ip addr
+        # container_ip=$(ip addr show eth0 | grep inet | awk '{print $2}' | cut -d/ -f1)
         
-        # Attempt to connect to HTTP and HTTPS ports on the VM's external IP
-        # Using nc (netcat) to test connectivity on port 80 and 443
-        # The -z flag tells nc to scan for open ports without sending any data, and -v is for verbose output
+        echo "Container IP Address: $container_ip"
         
-        # Test port 80 (HTTP)
-        nc -zv $vm_ip 80 || echo "Connection to $vm_ip on port 80 failed"
-        
-        # Test port 443 (HTTPS)
-        nc -zv $vm_ip 443 || echo "Connection to $vm_ip on port 443 failed"
-        
-    # Step 4: Check iptables Rules (Inside Container)
-    - name: Check iptables Rules (Inside Container)
-      run: |
-        # List the iptables rules on the host machine
-        sudo iptables -L -v -n || echo "Failed to list iptables rules"
-        sudo iptables -t nat -L -v -n || echo "Failed to list NAT iptables rules"
+        # Export the IP address for later use in iptables rules
+        echo "CONTAINER_IP=$container_ip" >> $GITHUB_ENV
 
-    # Step 5: Test Internet Connectivity (Ping External IP)
-    - name: Test Internet Connectivity (Ping External IP)
+    # Step 3: Display iptables Configuration before Altering
+    - name: Display iptables Configuration Before Altering
       run: |
-        # Test connectivity to an external public IP (Google DNS for example)
-        ping -c 4 1.1.1.1 || echo "Ping to 1.1.1.1 failed"
+        echo "Displaying iptables rules before alteration..."
+        sudo iptables -L -v -n
+        sudo iptables -t nat -L -v -n
 
-    # Step 6: Test Internet Connectivity (HTTP/HTTPS)
-    - name: Test HTTP/HTTPS Connectivity
+    # Step 4: Alter iptables (DNAT and Forwarding Rules)
+    - name: Alter iptables to Forward Ports to Container
       run: |
-        # Test HTTP access to a public website (using curl)
-        curl -I http://google.com || echo "HTTP connection failed"
-        
-        # Test HTTPS access to a public website
-        curl -I https://google.com || echo "HTTPS connection failed"
+        echo "Altering iptables rules to forward ports to container..."
 
-    # Step 7: Check DNS Resolution
-    - name: Check DNS Resolution
-      run: |
-        # Check the DNS configuration of the VM
-        cat /etc/resolv.conf || echo "Failed to read /etc/resolv.conf"
+        # Retrieve container IP from environment variable
+        container_ip=$CONTAINER_IP
         
-        # Test DNS resolution by pinging a known domain
-        ping -c 4 google.com || echo "Ping to google.com failed"
-        curl -I google.com || echo "DNS resolution for google.com failed"
+        # Allow incoming traffic on port 80 to be forwarded to the container
+        sudo iptables -t nat -A PREROUTING -p tcp --dport 80 -j DNAT --to-destination $container_ip:80
+        sudo iptables -A FORWARD -p tcp -d $container_ip --dport 80 -j ACCEPT
+        
+        # Allow incoming traffic on port 443 to be forwarded to the container (optional)
+        sudo iptables -t nat -A PREROUTING -p tcp --dport 443 -j DNAT --to-destination $container_ip:443
+        sudo iptables -A FORWARD -p tcp -d $container_ip --dport 443 -j ACCEPT
 
-    # Step 8: Check Default Route and Outbound Connectivity
-    - name: Check Default Route and Outbound Connectivity
-      run: |
-        # Check the default route (gateway)
-        ip route show || echo "Failed to show routing table"
-        
-        # Check if the gateway is reachable (test outbound traffic)
-        gateway=$(ip route | grep default | awk '{print $3}')
-        echo "Testing gateway $gateway..."
-        ping -c 4 $gateway || echo "Ping to gateway $gateway failed"
+        # Display the iptables rules after alteration
+        echo "Displaying iptables rules after alteration..."
+        sudo iptables -L -v -n
+        sudo iptables -t nat -L -v -n
 
-    # Step 9: Check iptables for Outbound Traffic Rules
-    - name: Check iptables for Outbound Traffic Rules
+    # Step 5: Confirm iptables Configuration
+    - name: Confirm iptables Configuration
       run: |
-        # List the iptables rules related to outbound traffic
-        sudo iptables -L -v -n || echo "Failed to list iptables rules"
-        sudo iptables -t nat -L -v -n || echo "Failed to list NAT iptables rules"
-        sudo iptables -t mangle -L -v -n || echo "Failed to list mangle iptables rules"
-
-    # Step 10: Check NAT Configuration (Outbound Traffic Translation)
-    - name: Check NAT Configuration (Outbound Traffic Translation)
-      run: |
-        # Check if the VM is using NAT to access the external network
-        iptables -t nat -L -v -n || echo "Failed to show NAT configuration"
-        
-        # If using AWS, GCP, or similar, check if the instance is behind a NAT gateway
-        curl http://169.254.169.254/latest/meta-data/local-ipv4 || echo "Failed to retrieve metadata"
-
-    # Step 11: Test Reachability of Common External Ports (80, 443)
-    - name: Test Reachability of External Ports (80, 443)
-      run: |
-        # Test access to public web servers on port 80 (HTTP)
-        nc -zv 8.8.8.8 80 || echo "Connection to 8.8.8.8 on port 80 failed"
-        
-        # Test access to public web servers on port 443 (HTTPS)
-        nc -zv 8.8.8.8 443 || echo "Connection to 8.8.8.8 on port 443 failed"
-
-    # Step 12: Test if the Container is Listening on Required Ports (Inbound)
-    - name: Test if the Container is Listening on Required Ports (Inbound)
-      run: |
-        # Check if the container is listening on the expected ports (e.g., 80, 443)
-        # This is useful for verifying that the container has services bound to the correct interfaces
-        
-        echo "Checking if the container is listening on required ports (e.g., 80, 443)"
-        netstat -tuln | grep -E '(:80|:443)' || echo "No services listening on required ports"
-        
-    # Step 13: Check if iptables on Host are Blocking Inbound Traffic to the Container
-    - name: Check if iptables on Host Block Inbound Traffic to Container
-      run: |
-        # List the iptables rules to see if there are any rules blocking inbound traffic to the container
-        sudo iptables -L -v -n | grep 'DROP' || echo "No DROP rules found in iptables"
-        
-        # Check if port forwarding is enabled for the container (if required)
-        sudo iptables -t nat -L -v -n | grep 'DNAT' || echo "No port forwarding rules found in iptables"
+        echo "Confirming iptables rules for the container..."
+        sudo iptables -L -v -n
+        sudo iptables -t nat -L -v -n
